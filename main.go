@@ -134,7 +134,7 @@ func handlerReset(s *state, cmd command) error{
 	fmt.Println("Database has been reset successfully.")
 	return nil
 }
-
+//list all registered users from the database
 func handlerUsers(s *state, cmd command) error{
 	users, err := s.db.GetUsers(context.Background())
 	if err != nil {
