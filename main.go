@@ -98,7 +98,9 @@ func handlerRegister(s *state, cmd command) error{
 	if len(cmd.args)==0 {
 		return fmt.Errorf("ERROR: Username not provided")
 	}
-	params := database.CreateUserParams{uuid.New(),time.Now(),time.Now(),sql.NullString{cmd.args[0],true}}
+	//build the param struct for a new user
+	params := database.CreateUserParams{uuid.New(),time.Now(),time.Now(),cmd.args[0]}
+	// use an empty context and create the user
 	user,err:=s.db.CreateUser(context.Background(),params)
 	if err != nil {
 		fmt.Println("User already exists!")
