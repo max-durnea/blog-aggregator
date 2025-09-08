@@ -85,8 +85,14 @@ func handlerLogin(s *state, cmd command) error{
 	if len(cmd.args)==0 {
 		return fmt.Errorf("ERROR: Username not provided")
 	}
+	user,err:=s.db.GetUser(context.Background(),cmd.args[0])
+	if err != nil {
+		fmt.Println("ERROR: User not found!")
+		os.Exit(1)
+	}
+	fmt.Println(user);
 	//Write to the config file the new Username
-	err:=s.cfg.SetUser(cmd.args[0])
+	err=s.cfg.SetUser(cmd.args[0])
 	if err != nil {
 		return err
 	}
@@ -103,8 +109,12 @@ func handlerRegister(s *state, cmd command) error{
 	// use an empty context and create the user
 	user,err:=s.db.CreateUser(context.Background(),params)
 	if err != nil {
-		fmt.Println("User already exists!")
-		fmt.Println(err)
+		fmt.Println("ERROR: User already exists!")
+		os.Exit(1)
+	}
+	err = s.cfg.SetUser(cmd.args[0])
+	if err != nil {
+		fmt.Println("ERROR: User could not be changed!")
 		os.Exit(1)
 	}
 	fmt.Println("User has been successfully created")
