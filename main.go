@@ -124,7 +124,7 @@ func handlerRegister(s *state, cmd command) error{
 }
 
 func handlerReset(s *state, cmd command) error{
-	err :+ s.db.ResetUsers(context.Background())
+	err := s.db.ResetUsers(context.Background())
 	if err != nil {
 		fmt.Println("ERROR: Failed to reset database")
 		os.Exit(1)
