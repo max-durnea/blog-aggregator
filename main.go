@@ -113,6 +113,7 @@ func handlerRegister(s *state, cmd command) error{
 		fmt.Println("ERROR: User already exists!")
 		os.Exit(1)
 	}
+	// set the user session inside the config file
 	err = s.cfg.SetUser(cmd.args[0])
 	if err != nil {
 		fmt.Println("ERROR: User could not be changed!")
@@ -122,7 +123,7 @@ func handlerRegister(s *state, cmd command) error{
 	fmt.Printf("%v\n",user)
 	return nil
 }
-
+//function to reset database
 func handlerReset(s *state, cmd command) error{
 	err := s.db.ResetUsers(context.Background())
 	if err != nil {
