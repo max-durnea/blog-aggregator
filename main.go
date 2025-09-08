@@ -69,6 +69,7 @@ func main(){
 	//Here we add new commands
 	cmds.register("login",handlerLogin)
 	cmds.register("register", handlerRegister)
+	cmds.register("reset", handlerReset)
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -119,5 +120,15 @@ func handlerRegister(s *state, cmd command) error{
 	}
 	fmt.Println("User has been successfully created")
 	fmt.Printf("%v\n",user)
+	return nil
+}
+
+func handlerReset(s *state, cmd command) error{
+	err :+ s.db.ResetUsers(context.Background())
+	if err != nil {
+		fmt.Println("ERROR: Failed to reset database")
+		os.Exit(1)
+	}
+	fmt.Println("Database has been reset successfully.")
 	return nil
 }
