@@ -1,11 +1,21 @@
 package main
+
 import (
 	"fmt"
 	"os"
+	"database/sql"
+	"time"
+	"context"
+
+	"github.com/google/uuid"
+	_ "github.com/lib/pq"
 	"github.com/max-durnea/blog-aggregator/internal/config"
+	"github.com/max-durnea/blog-aggregator/internal/database"
+
 )
 //maintain the state, here we have the Config struct which is built by reading the config file
 type state struct{
+	db *database.Queries
 	cfg *config.Config
 }
 
@@ -13,7 +23,7 @@ type command struct{
 	name string
 	args []string
 }
-//maintain the commands in a map of name->function
+//store the commands in a map of name->function
 type commands struct{
 	handlers map[string]func(*state, command) error
 }
@@ -48,10 +58,17 @@ func main(){
 		fmt.Println(err)
 		os.Exit(1)
 	}
-	
+	//Open Connection to the database
+	db, err := sql.Open("postgres",st.cfg.DB_url)
+	st.db = database.New(db)
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 	//Here we add new commands
 	cmds.register("login",handlerLogin)
-
+	cmds.register("register", handlerRegister)
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -74,5 +91,21 @@ func handlerLogin(s *state, cmd command) error{
 		return err
 	}
 	fmt.Println("User has been set successfuly!")
+	return nil
+}
+
+func handlerRegister(s *state, cmd command) error{
+	if len(cmd.args)==0 {
+		return fmt.Errorf("ERROR: Username not provided")
+	}
+	params := database.CreateUserParams{uuid.New(),time.Now(),time.Now(),sql.NullString{cmd.args[0],true}}
+	user,err:=s.db.CreateUser(context.Background(),params)
+	if err != nil {
+		fmt.Println("User already exists!")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Println("User has been successfully created")
+	fmt.Printf("%v\n",user)
 	return nil
 }
