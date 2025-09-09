@@ -119,6 +119,7 @@ func main(){
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerUsers)
 	cmds.register("agg", agg)
+	cmds.register("addfeed",handlerFeed)
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -205,6 +206,33 @@ func agg(s *state, cmd command) error{
 	fmt.Println(fetchFeed(context.Background(),"https://www.wagslane.dev/index.xml"))
 	return nil
 }
+
+func handlerFeed(s *state, cmd command) error{
+	if len(cmd.args)!=2{
+		fmt.Println("ERROR: Wrong arguments, provide name and url!")
+		os.Exit(1)
+	}
+	user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
+	if err != nil {
+		fmt.Println("ERROR: Could not get current user")
+		os.Exit(1)
+	}
+	name:=cmd.args[0]
+	url:=cmd.args[1]
+	
+	params:=database.CreateFeedParams{uuid.New(),time.Now(),time.Now(),name,url,user.ID}
+	res,err:=s.db.CreateFeed(context.Background(),params)
+	if err != nil {
+		fmt.Println("ERROR: Could not add feed entry")
+		fmt.Println(err)
+		os.Exit(1)
+	}
+	fmt.Println(res)
+	return nil
+
+}
+
+
 
 
 
