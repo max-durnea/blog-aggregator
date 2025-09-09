@@ -6,6 +6,10 @@ import (
 	"database/sql"
 	"time"
 	"context"
+	"net/http"
+	"encoding/xml"
+	"io"
+	"html"
 
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -27,6 +31,49 @@ type command struct{
 type commands struct{
 	handlers map[string]func(*state, command) error
 }
+
+type RSSFeed struct {
+	Channel struct {
+		Title string `xml:"title"`
+		Link string `xml:"link"`
+		Description string `xml:"description"`
+		Item []RSSItem `xml:"item"`
+	} `xml:"channel"`
+}
+
+type RSSItem struct {
+	Title       string `xml:"title"`
+	Link        string `xml:"link"`
+	Description string `xml:"description"`
+	PubDate     string `xml:"pubDate"`
+}
+
+func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error){
+	//Create the request with the provided URL and Context
+	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	req.Header.Add("User-Agent","gator")
+	//Create a client and do the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	//Read the bytes and unmarshal data into the RSSFeed struct
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var rssFeed RSSFeed
+	xml.Unmarshal(data,&rssFeed)
+	//Unescape strings
+	rssFeed.Channel.Title = html.UnescapeString(rssFeed.Channel.Title)
+	rssFeed.Channel.Description = html.UnescapeString(rssFeed.Channel.Description)
+
+	for i := range rssFeed.Channel.Item {
+		rssFeed.Channel.Item[i].Title = html.UnescapeString(rssFeed.Channel.Item[i].Title)
+		rssFeed.Channel.Item[i].Description = html.UnescapeString(rssFeed.Channel.Item[i].Description)
+	}
+	return &rssFeed,nil
+	
+}
+
 //run a command
 func (c *commands) run(s *state, cmd command){
 	handler,ok := c.handlers[cmd.name]
@@ -71,6 +118,7 @@ func main(){
 	cmds.register("register", handlerRegister)
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerUsers)
+	cmds.register("agg", agg)
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -152,3 +200,11 @@ func handlerUsers(s *state, cmd command) error{
 	}
 	return nil
 }
+
+func agg(s *state, cmd command) error{
+	fmt.Println(fetchFeed(context.Background(),"https://www.wagslane.dev/index.xml"))
+	return nil
+}
+
+
+
