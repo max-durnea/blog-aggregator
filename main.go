@@ -51,17 +51,30 @@ type RSSItem struct {
 func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error){
 	//Create the request with the provided URL and Context
 	req, err := http.NewRequestWithContext(ctx, "GET", feedURL, nil)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to create request: %v\n", err)
+		return nil, err
+	}
 	req.Header.Add("User-Agent","gator")
 	//Create a client and do the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to make HTTP request: %v\n", err)
+		return nil, err
+	}
 	//Read the bytes and unmarshal data into the RSSFeed struct
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
+		fmt.Printf("ERROR: Failed to read response body: %v\n", err)
 		return nil, err
 	}
 	var rssFeed RSSFeed
-	xml.Unmarshal(data,&rssFeed)
+	err = xml.Unmarshal(data,&rssFeed)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to unmarshal XML: %v\n", err)
+		return nil, err
+	}
 	//Unescape strings
 	rssFeed.Channel.Title = html.UnescapeString(rssFeed.Channel.Title)
 	rssFeed.Channel.Description = html.UnescapeString(rssFeed.Channel.Description)
@@ -102,14 +115,14 @@ func main(){
 	//read the config file into the Config struct
 	cfg,err:=config.Read()
 	if err!=nil {
-		fmt.Println(err)
+		fmt.Printf("ERROR: Failed to read config: %v\n", err)
 		os.Exit(1)
 	}
 	//Open Connection to the database
 	db, err := sql.Open("postgres",st.cfg.DB_url)
 	st.db = database.New(db)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Printf("ERROR: Failed to open database connection: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -120,6 +133,7 @@ func main(){
 	cmds.register("users", handlerUsers)
 	cmds.register("agg", agg)
 	cmds.register("addfeed",handlerFeed)
+	cmds.register("feeds",handlerAllFeeds)
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -138,7 +152,7 @@ func handlerLogin(s *state, cmd command) error{
 	}
 	user,err:=s.db.GetUser(context.Background(),cmd.args[0])
 	if err != nil {
-		fmt.Println("ERROR: User not found!")
+		fmt.Printf("ERROR: User not found: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println(user);
@@ -160,13 +174,13 @@ func handlerRegister(s *state, cmd command) error{
 	// use an empty context and create the user
 	user,err:=s.db.CreateUser(context.Background(),params)
 	if err != nil {
-		fmt.Println("ERROR: User already exists!")
+		fmt.Printf("ERROR: User already exists: %v\n", err)
 		os.Exit(1)
 	}
 	// set the user session inside the config file
 	err = s.cfg.SetUser(cmd.args[0])
 	if err != nil {
-		fmt.Println("ERROR: User could not be changed!")
+		fmt.Printf("ERROR: User could not be changed: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println("User has been successfully created")
@@ -177,7 +191,7 @@ func handlerRegister(s *state, cmd command) error{
 func handlerReset(s *state, cmd command) error{
 	err := s.db.ResetUsers(context.Background())
 	if err != nil {
-		fmt.Println("ERROR: Failed to reset database")
+		fmt.Printf("ERROR: Failed to reset database: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println("Database has been reset successfully.")
@@ -187,7 +201,7 @@ func handlerReset(s *state, cmd command) error{
 func handlerUsers(s *state, cmd command) error{
 	users, err := s.db.GetUsers(context.Background())
 	if err != nil {
-		fmt.Println("ERROR: Could not get users!")
+		fmt.Printf("ERROR: Could not get users: %v\n", err)
 		os.Exit(1)
 	}
 	for _,user := range users {
@@ -214,7 +228,7 @@ func handlerFeed(s *state, cmd command) error{
 	}
 	user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
 	if err != nil {
-		fmt.Println("ERROR: Could not get current user")
+		fmt.Printf("ERROR: Could not get current user: %v\n", err)
 		os.Exit(1)
 	}
 	name:=cmd.args[0]
@@ -223,13 +237,29 @@ func handlerFeed(s *state, cmd command) error{
 	params:=database.CreateFeedParams{uuid.New(),time.Now(),time.Now(),name,url,user.ID}
 	res,err:=s.db.CreateFeed(context.Background(),params)
 	if err != nil {
-		fmt.Println("ERROR: Could not add feed entry")
-		fmt.Println(err)
+		fmt.Printf("ERROR: Could not add feed entry: %v\n", err)
 		os.Exit(1)
 	}
 	fmt.Println(res)
 	return nil
 
+}
+
+func handlerAllFeeds(s *state, cmd command) error{
+	feeds,err:=s.db.GetFeeds(context.Background())
+	if err != nil {
+		fmt.Printf("ERROR: Could not fetch feeds: %v\n", err)
+		os.Exit(1)
+	}
+	for _, feed := range feeds {
+		user,err:=s.db.GetUserById(context.Background(),feed.UserID)
+		if err != nil {
+			fmt.Printf("ERROR: Could not fetch user by id: %v\n", err)
+			continue
+		}
+		fmt.Printf(" * %v\n * %v\n * %v\n---\n",feed.Name, feed.Url,user.Name)
+	}
+	return nil
 }
 
 

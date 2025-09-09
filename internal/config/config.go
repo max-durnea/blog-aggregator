@@ -49,6 +49,9 @@ func (cfg Config)SetUser(username string) error{
 	file:= homedir+"/"+configFileName
 	//build the byte slice of the Config struct
 	js,err:= json.Marshal(cfg)
+	if err != nil {
+		return err
+	}
 	//write the slice to the file 0666 is used to allow any user to read and write to the file but not execute it
 	if err := os.WriteFile(file, js,0666); err != nil {
 		return err
