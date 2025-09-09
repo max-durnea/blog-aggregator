@@ -134,6 +134,8 @@ func main(){
 	cmds.register("agg", agg)
 	cmds.register("addfeed",handlerFeed)
 	cmds.register("feeds",handlerAllFeeds)
+	cmds.register("follow",handlerFollow)
+	cmds.register("following",handlerFollows)
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -241,6 +243,7 @@ func handlerFeed(s *state, cmd command) error{
 		os.Exit(1)
 	}
 	fmt.Println(res)
+	handlerFollow(s,command{args: []string{url}})
 	return nil
 
 }
@@ -261,6 +264,52 @@ func handlerAllFeeds(s *state, cmd command) error{
 	}
 	return nil
 }
+
+func handlerFollow(s *state, cmd command) error{
+	if len(cmd.args) != 1 {
+		fmt.Printf("ERROR: Wrong argument, provide the URL\n")
+		os.Exit(1)
+	}
+	feed,err:=s.db.GetFeedByUrl(context.Background(),cmd.args[0])
+	if err != nil {
+		fmt.Printf("ERROR: Could not fetch feed: %v\n",err)
+		os.Exit(1)
+	}
+	user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
+	if err != nil {
+		fmt.Printf("ERROR: Could not fetch current user: %v\n",err)
+		os.Exit(1)
+	}
+
+	params := database.CreateFeedFollowParams{uuid.New(),time.Now(),time.Now(),user.ID,feed.ID}
+	feed_follow,err:=s.db.CreateFeedFollow(context.Background(),params)
+	if err != nil {
+		fmt.Printf("ERROR: Could not create feed follow: %v\n",err)
+		os.Exit(1)
+	}
+	fmt.Printf("Added feed %v for user %v\n",feed_follow.FeedName,feed_follow.UserName)
+	return nil
+}
+
+func handlerFollows(s *state,cmd command) error{
+	user,err:= s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
+	if err != nil {
+		fmt.Printf("ERROR: Could not fetch user: %v\n", err)
+		os.Exit(1)
+	}
+	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
+	if err != nil {
+		fmt.Printf("ERROR: Could not fetch feeds: %v\n",err)
+		os.Exit(1)
+	}
+	fmt.Printf(" - %v\n",user.Name)
+	for _,feed := range feeds {
+		fmt.Printf(" * %v\n",feed.FeedName)
+	}
+	return nil
+
+}
+
 
 
 
