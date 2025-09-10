@@ -132,10 +132,10 @@ func main(){
 	cmds.register("reset", handlerReset)
 	cmds.register("users", handlerUsers)
 	cmds.register("agg", agg)
-	cmds.register("addfeed",handlerFeed)
+	cmds.register("addfeed",middlewareLoggedIn(handlerFeed))
 	cmds.register("feeds",handlerAllFeeds)
-	cmds.register("follow",handlerFollow)
-	cmds.register("following",handlerFollows)
+	cmds.register("follow",middlewareLoggedIn(handlerFollow))
+	cmds.register("following",middlewareLoggedIn(handlerFollows))
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
@@ -223,16 +223,16 @@ func agg(s *state, cmd command) error{
 	return nil
 }
 
-func handlerFeed(s *state, cmd command) error{
+func handlerFeed(s *state, cmd command, user database.User) error{
 	if len(cmd.args)!=2{
 		fmt.Println("ERROR: Wrong arguments, provide name and url!")
 		os.Exit(1)
 	}
-	user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
+	/*user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
 	if err != nil {
 		fmt.Printf("ERROR: Could not get current user: %v\n", err)
 		os.Exit(1)
-	}
+	}*/
 	name:=cmd.args[0]
 	url:=cmd.args[1]
 	
@@ -243,7 +243,7 @@ func handlerFeed(s *state, cmd command) error{
 		os.Exit(1)
 	}
 	fmt.Println(res)
-	handlerFollow(s,command{args: []string{url}})
+	handlerFollow(s,command{args: []string{url}},user)
 	return nil
 
 }
@@ -265,7 +265,7 @@ func handlerAllFeeds(s *state, cmd command) error{
 	return nil
 }
 
-func handlerFollow(s *state, cmd command) error{
+func handlerFollow(s *state, cmd command, user database.User) error{
 	if len(cmd.args) != 1 {
 		fmt.Printf("ERROR: Wrong argument, provide the URL\n")
 		os.Exit(1)
@@ -275,11 +275,11 @@ func handlerFollow(s *state, cmd command) error{
 		fmt.Printf("ERROR: Could not fetch feed: %v\n",err)
 		os.Exit(1)
 	}
-	user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
+	/*user,err:=s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
 	if err != nil {
 		fmt.Printf("ERROR: Could not fetch current user: %v\n",err)
 		os.Exit(1)
-	}
+	}*/
 
 	params := database.CreateFeedFollowParams{uuid.New(),time.Now(),time.Now(),user.ID,feed.ID}
 	feed_follow,err:=s.db.CreateFeedFollow(context.Background(),params)
@@ -291,12 +291,12 @@ func handlerFollow(s *state, cmd command) error{
 	return nil
 }
 
-func handlerFollows(s *state,cmd command) error{
-	user,err:= s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
+func handlerFollows(s *state,cmd command, user database.User) error{
+	/*user,err:= s.db.GetUser(context.Background(),s.cfg.CurrentUserName)
 	if err != nil {
 		fmt.Printf("ERROR: Could not fetch user: %v\n", err)
 		os.Exit(1)
-	}
+	}*/
 	feeds, err := s.db.GetFeedFollowsForUser(context.Background(), user.ID)
 	if err != nil {
 		fmt.Printf("ERROR: Could not fetch feeds: %v\n",err)
@@ -309,8 +309,19 @@ func handlerFollows(s *state,cmd command) error{
 	return nil
 
 }
-
-
+//middleware for functions that have to ensure the user is logged in
+func middlewareLoggedIn(handler func(s *state, cmd command, user database.User) error) func(*state, command) error{
+	//we return a new function where we simply fetch the current user before calling our handler
+	return func(s *state,cmd command) error {
+		user, err := s.db.GetUser(context.Background(), s.cfg.CurrentUserName)
+		if err != nil {
+			fmt.Println("ERROR: Could not fetch user: %v\n",err)
+			os.Exit(1)
+		}
+		//the handlers need to accept the user struct
+		return handler(s, cmd, user)
+	}
+}
 
 
 
