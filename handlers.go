@@ -11,6 +11,7 @@ import (
 	"html"
 	"database/sql"
 	"strings"
+	"strconv"
 
 	"github.com/google/uuid"
 	"github.com/max-durnea/blog-aggregator/internal/database"
@@ -355,6 +356,29 @@ func handlerUnfollow(s *state, cmd command, user database.User) error{
 		os.Exit(1)
 	}
 	fmt.Printf("User unsubscribed from %v\n",cmd.args[0])
+	return nil
+}
+
+func handlerBrowse(s *state, cmd command, user database.User) error{
+	var limit int32
+	if len(cmd.args) >= 1 {
+        parsed, err := strconv.ParseInt(cmd.args[0], 10, 32)
+        if err != nil {
+            fmt.Printf("ERROR: invalid number for limit: %v\n", err)
+            return err
+        }
+        limit = int32(parsed)
+	}else{
+		limit = 2
+	}
+	posts,err:= s.db.GetPostsForUser(context.Background(),database.GetPostsForUserParams{user.ID,limit})
+	if err != nil {
+		fmt.Printf("ERROR: Could not fetch posts for user: %v\n",err)
+		os.Exit(1)
+	}
+	for _,post := range posts {
+		fmt.Printf("* %v\n - %v\n = %v\n\n",post.Title.String,post.Description.String,post.Url)
+	}
 	return nil
 }
 

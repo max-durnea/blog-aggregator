@@ -74,6 +74,7 @@ func main(){
 	cmds.register("follow",middlewareLoggedIn(handlerFollow))
 	cmds.register("following",middlewareLoggedIn(handlerFollows))
 	cmds.register("unfollow",middlewareLoggedIn(handlerUnfollow))
+	cmds.register("browse",middlewareLoggedIn(handlerBrowse))
 	//Get the command line arguments
 	args:=os.Args
 	if(len(args)<2){
