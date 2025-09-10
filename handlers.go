@@ -9,6 +9,8 @@ import (
 	"encoding/xml"
 	"io"
 	"html"
+	"database/sql"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/max-durnea/blog-aggregator/internal/database"
@@ -45,16 +47,20 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error){
 		fmt.Printf("ERROR: Failed to make HTTP request: %v\n", err)
 		return nil, err
 	}
+	defer resp.Body.Close()
+	
 	//Read the bytes and unmarshal data into the RSSFeed struct
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Printf("ERROR: Failed to read response body: %v\n", err)
 		return nil, err
 	}
+	
 	var rssFeed RSSFeed
 	err = xml.Unmarshal(data,&rssFeed)
 	if err != nil {
-		fmt.Printf("ERROR: Failed to unmarshal XML: %v\n", err)
+		fmt.Printf("ERROR: Failed to unmarshal XML from %s: %v\n", feedURL, err)
+		fmt.Printf("Response content preview: %.200s...\n", string(data))
 		return nil, err
 	}
 	//Unescape strings
@@ -69,8 +75,86 @@ func fetchFeed(ctx context.Context, feedURL string) (*RSSFeed, error){
 	
 }
 
+
+func parsePubDate(dateStr string) (time.Time, error) {
+    layouts := []string{
+        time.RFC1123,        
+        time.RFC1123Z,       
+        time.RFC3339,
+    }
+
+    for _, layout := range layouts {
+        t, err := time.Parse(layout, dateStr)
+        if err == nil {
+            return t, nil
+        }
+    }
+
+    return time.Time{}, fmt.Errorf("Unable to parse date: %s", dateStr)
+}
+
+func scrapeFeeds(s *state) error{
+	nextFeed,err:= s.db.GetNextFeedToFetch(context.Background())
+	if err != nil {
+		fmt.Printf("ERROR: Failed to fetch next feed: %v\n",err)
+		return nil
+	}
+	err=s.db.MarkFeedFetched(context.Background(), nextFeed.ID)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to mark feed as fetched: %v\n",err)
+		os.Exit(1)
+	}
+	feed,err := fetchFeed(context.Background(), nextFeed.Url)
+	if err != nil {
+		fmt.Printf("ERROR: Failed to fetch feed from web: %v\n",err)
+		return nil
+	}
+
+	for _,item := range feed.Channel.Item{
+		pubTime,err := parsePubDate(item.PubDate)
+		if err != nil {
+			fmt.Println("ERROR: %v\n",err)
+		}
+		params := database.CreatePostParams{
+			ID : uuid.New(),
+			CreatedAt : time.Now(),
+			UpdatedAt : time.Now(),
+			Title : sql.NullString{item.Title, item.Title != ""},
+			Url : item.Link,
+			Description : sql.NullString{item.Description, item.Description != ""},
+			PublishedAt : sql.NullTime{pubTime, true},
+			FeedID : nextFeed.ID,
+		}
+		_, err = s.db.CreatePost(context.Background(),params)
+		if err != nil {
+			if strings.Contains(err.Error(), "unique constraint") || strings.Contains(err.Error(), "duplicate key") {
+				//fmt.Println("Post URL already exists, ignoring...")
+				continue
+			}
+			fmt.Println("ERROR: Could not insert new post: %v\n",err)
+			continue
+		}
+	}
+	
+	return nil
+
+}
+
 func agg(s *state, cmd command) error{
-	fmt.Println(fetchFeed(context.Background(),"https://www.wagslane.dev/index.xml"))
+	if len(cmd.args) != 1 {
+		fmt.Println("ERROR: Please provide the time between requests like: 1s 1m 1h")
+		os.Exit(1)
+	}
+	timeBetweenRequests, err := time.ParseDuration(cmd.args[0])
+	if err != nil {
+		fmt.Println("ERROR: Error parsing duration: %v\n",err)
+		os.Exit(1)
+	}
+	fmt.Printf("Scraping feeds every %v...\n",timeBetweenRequests)
+	ticker := time.NewTicker(timeBetweenRequests)
+	for ; ; <-ticker.C {
+		scrapeFeeds(s)
+	}
 	return nil
 }
 
@@ -217,15 +301,29 @@ func handlerRegister(s *state, cmd command) error{
 	return nil
 }
 //function to reset database
-func handlerReset(s *state, cmd command) error{
-	err := s.db.ResetUsers(context.Background())
-	if err != nil {
-		fmt.Printf("ERROR: Failed to reset database: %v\n", err)
-		os.Exit(1)
-	}
-	fmt.Println("Database has been reset successfully.")
-	return nil
+func handlerReset(s *state, cmd command) error {
+    // 1. Delete all posts first
+    if err := s.db.ResetPosts(context.Background()); err != nil {
+        fmt.Printf("ERROR: Failed to reset posts: %v\n", err)
+        os.Exit(1)
+    }
+
+    // 2. Delete all feeds
+    if err := s.db.ResetFeeds(context.Background()); err != nil {
+        fmt.Printf("ERROR: Failed to reset feeds: %v\n", err)
+        os.Exit(1)
+    }
+
+    // 3. Delete users
+    if err := s.db.ResetUsers(context.Background()); err != nil {
+        fmt.Printf("ERROR: Failed to reset users: %v\n", err)
+        os.Exit(1)
+    }
+
+    fmt.Println("Database has been reset successfully.")
+    return nil
 }
+
 //list all registered users from the database
 func handlerUsers(s *state, cmd command) error{
 	users, err := s.db.GetUsers(context.Background())
@@ -259,3 +357,4 @@ func handlerUnfollow(s *state, cmd command, user database.User) error{
 	fmt.Printf("User unsubscribed from %v\n",cmd.args[0])
 	return nil
 }
+
