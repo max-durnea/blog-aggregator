@@ -29,3 +29,13 @@ FROM feed_follows ff
 JOIN users u ON ff.user_id = u.id
 JOIN feeds f ON ff.feed_id = f.id
 WHERE ff.user_id = $1;
+
+-- name: DeleteFeedFollow
+
+DELETE FROM feed_follows ff
+USING users u, feeds f
+WHERE ff.user_id = u.id
+  AND ff.feed_id = f.id
+  AND u.username = $1
+  AND f.url = $2;
+
