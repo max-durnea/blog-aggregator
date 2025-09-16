@@ -1,7 +1,7 @@
 # Blog Aggregator (Gator)
 
 A command-line RSS feed aggregator built with Go that allows you to follow, manage, and browse multiple blog feeds from a single interface.
-
+> **Note**: This project was built as part of a guided learning experience from [boot.dev](https://boot.dev), following their Go backend development course.
 ## 🚀 Features
 
 - **User Management**: Register users and manage login sessions
@@ -253,3 +253,4 @@ For verbose output during feed fetching, the application includes debug printing
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [SQLC Documentation](https://docs.sqlc.dev/)
 - [Goose Migration Tool](https://github.com/pressly/goose)
+
